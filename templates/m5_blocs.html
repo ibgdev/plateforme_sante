@@ -2,21 +2,172 @@
 
 {% block title %}M5 — Planning des blocs opératoires{% endblock %}
 
+{% block extra_css %}
+<style>
+    .m5-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-top: 0.75rem;
+    }
+    .m5-field label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+        font-size: 0.9rem;
+    }
+    .m5-field input {
+        width: 100%;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+    }
+    .m5-btn {
+        margin-top: 0.75rem;
+        padding: 0.6rem 1.25rem;
+        background-color: #155e75;
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .m5-btn:hover {
+        background-color: #0e7490;
+    }
+    .m5-kpis {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 0.75rem;
+        margin: 0.75rem 0 1rem;
+    }
+    .m5-kpi {
+        padding: 0.75rem;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+    }
+    .m5-kpi strong {
+        display: block;
+        font-size: 1.1rem;
+        color: #0f172a;
+    }
+    .m5-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.75rem;
+    }
+    .m5-table th, .m5-table td {
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .m5-table th {
+        background: #f1f5f9;
+    }
+    .m5-alerte {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        background: #fef2f2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+        border-radius: 6px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>M5 — Planning des blocs opératoires</h1>
 
-<section class="module-zone">
-    <h2>1. Entrées</h2>
-    <p>TODO (Responsable M5) : nombre de salles, horaires d'ouverture, opérations, indisponibilités chirurgiens.</p>
-</section>
+<form method="post" action="{{ url_for('m5.page_m5') }}">
+    <section class="module-zone">
+        <h2>1. Entrées</h2>
+        <div class="m5-form-grid">
+            <div class="m5-field">
+                <label for="nb_salles">Nombre de salles</label>
+                <input id="nb_salles" name="nb_salles" type="number" min="1" max="20" value="{{ parametres.nb_salles }}" required>
+            </div>
+            <div class="m5-field">
+                <label for="heure_debut">Heure d'ouverture (h)</label>
+                <input id="heure_debut" name="heure_debut" type="number" min="0" max="23" value="{{ parametres.heure_debut }}" required>
+            </div>
+            <div class="m5-field">
+                <label for="heure_fin">Heure de fermeture (h)</label>
+                <input id="heure_fin" name="heure_fin" type="number" min="1" max="24" value="{{ parametres.heure_fin }}" required>
+            </div>
+            <div class="m5-field">
+                <label for="duree_creneau">Durée d'un créneau (min)</label>
+                <input id="duree_creneau" name="duree_creneau" type="number" min="10" max="120" step="5" value="{{ parametres.duree_creneau }}" required>
+            </div>
+        </div>
+    </section>
 
-<section class="module-zone">
-    <h2>2. Résolution</h2>
-    <p>TODO (Responsable M5) : bouton Résoudre appelant <code>modules.m5_blocs.solve</code>.</p>
-</section>
+    <section class="module-zone">
+        <h2>2. Résolution</h2>
+        <p>Modèle initial d'ordonnancement résolu via Gurobi (jeu d'opérations de démonstration en attendant les CSV communs).</p>
+        <button class="m5-btn" type="submit">Résoudre le planning</button>
+        {% if erreur %}
+        <div class="m5-alerte">{{ erreur }}</div>
+        {% endif %}
+    </section>
+</form>
 
 <section class="module-zone">
     <h2>3. Résultats</h2>
-    <p>TODO (Responsable M5) : diagramme de Gantt Plotly par salle, taux d'occupation, heures supplémentaires.</p>
+    {% if resultat %}
+        <div class="m5-kpis">
+            <div class="m5-kpi">
+                <span>Statut</span>
+                <strong>{{ resultat.statut }}</strong>
+            </div>
+            <div class="m5-kpi">
+                <span>Durée journée (min)</span>
+                <strong>{{ resultat.objectif }}</strong>
+            </div>
+            <div class="m5-kpi">
+                <span>Occupation globale</span>
+                <strong>{{ resultat.solution.taux_occupation.global }} %</strong>
+            </div>
+            <div class="m5-kpi">
+                <span>Temps de calcul</span>
+                <strong>{{ resultat.temps }} s</strong>
+            </div>
+        </div>
+
+        {% if resultat.solution.planning %}
+        <table class="m5-table">
+            <thead>
+                <tr>
+                    <th>Salle</th>
+                    <th>Opération</th>
+                    <th>Chirurgien</th>
+                    <th>Priorité</th>
+                    <th>Début</th>
+                    <th>Fin</th>
+                    <th>Durée (min)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for op in resultat.solution.planning %}
+                <tr>
+                    <td>{{ op.salle }}</td>
+                    <td>{{ op.id }}</td>
+                    <td>{{ op.chirurgien }}</td>
+                    <td>{{ op.priorite }}</td>
+                    <td>{{ op.debut }}</td>
+                    <td>{{ op.fin }}</td>
+                    <td>{{ op.duree_min }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="m5-alerte">
+            Aucun planning généré ({{ resultat.solution.message or "problème infaisable" }}).
+        </div>
+        {% endif %}
+    {% else %}
+        <p>Lancez la résolution ci-dessus pour calculer un premier planning des blocs opératoires (le diagramme de Gantt Plotly sera intégré dans la prochaine itération).</p>
+    {% endif %}
 </section>
 {% endblock %}
