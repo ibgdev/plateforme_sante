@@ -2,21 +2,202 @@
 
 {% block title %}M6 — Planning du personnel{% endblock %}
 
+{% block extra_css %}
+<style>
+    .m6-intro { margin-bottom: 1.25rem; color: #475569; }
+    .m6-form { display: grid; gap: 1rem; }
+    .m6-card { padding: 1.1rem; background: #fff; border: 1px solid #dbe3ea; border-radius: 10px; }
+    .m6-card h2 { margin-bottom: .75rem; font-size: 1.15rem; }
+    .m6-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .75rem; }
+    .m6-field { display: flex; flex-direction: column; gap: .25rem; }
+    .m6-field label, .m6-label { font-weight: 650; font-size: .9rem; }
+    .m6-field input, .m6-field select, .m6-card textarea, .m6-employee input { width: 100%; padding: .5rem; border: 1px solid #cbd5e1; border-radius: 5px; font: inherit; }
+    .m6-help { color: #64748b; font-size: .85rem; margin: .35rem 0 .75rem; }
+    .m6-scroll { overflow-x: auto; }
+    .m6-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .m6-table th, .m6-table td { border: 1px solid #e2e8f0; padding: .45rem; text-align: center; white-space: nowrap; }
+    .m6-table th { background: #f1f5f9; }
+    .m6-demand input { width: 4rem; padding: .35rem; text-align: center; }
+    .m6-employee td:first-child { min-width: 110px; }
+    .m6-employee td { min-width: 115px; }
+    .m6-button { cursor: pointer; border: 0; border-radius: 5px; padding: .6rem .9rem; font: inherit; font-weight: 650; }
+    .m6-button-add { color: #075985; background: #e0f2fe; }
+    .m6-button-remove { color: #991b1b; background: #fee2e2; }
+    .m6-button-run { color: #fff; background: #155e75; padding: .75rem 1.2rem; }
+    .m6-error { padding: .75rem; background: #fef2f2; color: #991b1b; border-left: 4px solid #dc2626; }
+    .m6-status { display: inline-block; border-radius: 999px; padding: .2rem .65rem; background: #dcfce7; color: #166534; font-weight: 700; }
+    .m6-status-faisable { background: #fef3c7; color: #92400e; }
+    .m6-status-infaisable { background: #fee2e2; color: #991b1b; }
+    .m6-shift-matin { background: #fef3c7; }
+    .m6-shift-soir { background: #ffedd5; }
+    .m6-shift-nuit { background: #dbeafe; }
+    .m6-shift-repos { color: #64748b; }
+    .m6-metrics { display: flex; flex-wrap: wrap; gap: 1rem; margin: .75rem 0; }
+    .m6-metric { padding: .7rem 1rem; background: #f8fafc; border-radius: 7px; }
+    .m6-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1>M6 — Planning du personnel (Nurse Rostering)</h1>
+<h1>M6 — Planning du personnel</h1>
+<p class="m6-intro">Configurez les besoins, les contrats et les indisponibilités, puis générez un planning sur 7 ou 28 jours.</p>
 
-<section class="module-zone">
-    <h2>1. Entrées</h2>
-    <p>TODO (Responsable M6) : nombre d'infirmiers, nombre de jours (7 ou 28), besoins par service, congés.</p>
-</section>
+{% if erreur %}<p class="m6-error" role="alert">{{ erreur }}</p>{% endif %}
 
-<section class="module-zone">
-    <h2>2. Résolution</h2>
-    <p>TODO (Responsable M6) : bouton Résoudre appelant <code>modules.m6_personnel.solve</code>.</p>
-</section>
+<form class="m6-form" method="post" action="{{ url_for('m6.page_m6') }}">
+    <section class="m6-card">
+        <h2>1. Période et effectif</h2>
+        <div class="m6-grid">
+            <div class="m6-field">
+                <label for="nb_jours">Période</label>
+                <select id="nb_jours" name="nb_jours">
+                    <option value="7" {% if etat.nb_jours == 7 %}selected{% endif %}>7 jours</option>
+                    <option value="28" {% if etat.nb_jours == 28 %}selected{% endif %}>28 jours</option>
+                </select>
+            </div>
+            <div class="m6-field">
+                <label for="limite_temps">Temps maximal de calcul (secondes)</label>
+                <input id="limite_temps" name="limite_temps" type="number" min="0.1" step="0.1" value="{{ etat.limite_temps }}" required>
+            </div>
+        </div>
+        <p class="m6-help">Chaque ligne décrit un infirmier. Les limites de contrat ne peuvent pas dépasser 5 jours par semaine, afin de garantir au moins deux jours de repos.</p>
+        <div class="m6-scroll">
+            <table class="m6-table">
+                <thead><tr><th>Identifiant</th><th>Contrat</th><th>Jours max./semaine</th><th>Heures max./semaine</th><th>Indisponibilités</th><th></th></tr></thead>
+                <tbody id="m6-employees">
+                    {% for infirmier in etat.infirmiers %}
+                    <tr class="m6-employee">
+                        <td><input name="infirmier_id[]" aria-label="Identifiant infirmier" value="{{ infirmier.id }}" required></td>
+                        <td><input name="contrat[]" aria-label="Contrat" value="{{ infirmier.contrat }}"></td>
+                        <td><input name="max_jours[]" aria-label="Jours maximum par semaine" type="number" min="0" max="5" value="{{ infirmier.max_jours_semaine }}" required></td>
+                        <td><input name="max_heures[]" aria-label="Heures maximum par semaine" type="number" min="0" step="0.5" value="{{ infirmier.max_heures_semaine }}" required></td>
+                        <td><input name="indisponibilites[]" aria-label="Indices des jours indisponibles" placeholder="ex. 0, 4" value="{{ infirmier.indisponibilites_texte|default('') }}"></td>
+                        <td><button class="m6-button m6-button-remove" type="button" onclick="m6SupprimerInfirmier(this)" aria-label="Supprimer l'infirmier">Supprimer</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="m6-help">Indisponibilités : indices de jour séparés par des virgules, de 0 à 27 (J1 = 0). Une indisponibilité bloque toute la journée.</p>
+        <button class="m6-button m6-button-add" type="button" onclick="m6AjouterInfirmier()">+ Ajouter un infirmier</button>
+    </section>
 
-<section class="module-zone">
-    <h2>3. Résultats</h2>
-    <p>TODO (Responsable M6) : tableau de planning coloré, heures par personne, indicateur d'équité.</p>
+    <section class="m6-card">
+        <h2>2. Besoins minimums par jour</h2>
+        <p class="m6-help">Indiquez le nombre minimum d'infirmiers requis pour chaque service et chaque jour.</p>
+        <div class="m6-scroll">
+            <table class="m6-table m6-demand">
+                <thead><tr><th>Service</th>{% for jour in range(28) %}<th class="m6-day-column" data-day="{{ jour }}">J{{ jour + 1 }}</th>{% endfor %}</tr></thead>
+                <tbody>
+                    {% for service in services %}
+                    <tr>
+                        <th scope="row">{{ libelles_services[service] }}</th>
+                        {% for jour in range(28) %}
+                        <td class="m6-day-column" data-day="{{ jour }}"><input name="besoin_{{ service }}_{{ jour }}" type="number" min="0" value="{{ etat.besoins_min[service][jour] }}" aria-label="Besoin {{ libelles_services[service] }} jour {{ jour + 1 }}"></td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="m6-card">
+        <h2>3. Coûts, durées et préférences</h2>
+        <p class="m6-help">Coûts par défaut : matin 1, soir 1,15, nuit 1,5. Les valeurs sont des coefficients relatifs d'affectation. Les préférences sont facultatives.</p>
+        <div class="m6-grid">
+            {% for service in services %}
+            <div class="m6-field">
+                <label for="cout_{{ service }}">Coût — {{ libelles_services[service] }}</label>
+                <input id="cout_{{ service }}" name="cout_{{ service }}" type="number" min="0" step="0.01" value="{{ etat.couts_services[service] }}" required>
+            </div>
+            <div class="m6-field">
+                <label for="heures_{{ service }}">Durée (heures) — {{ libelles_services[service] }}</label>
+                <input id="heures_{{ service }}" name="heures_{{ service }}" type="number" min="0" step="0.5" value="{{ etat.heures_services[service] }}" required>
+            </div>
+            {% endfor %}
+            <div class="m6-field">
+                <label for="penalite_preferences">Pénalité par préférence non respectée</label>
+                <input id="penalite_preferences" name="penalite_preferences" type="number" min="0" step="0.1" value="{{ etat.penalite_preferences }}" required>
+            </div>
+        </div>
+        <div class="m6-field" style="margin-top:.75rem">
+            <label for="preferences_json">Préférences (facultatif, JSON)</label>
+            <textarea id="preferences_json" name="preferences_json" rows="4" placeholder='[{"infirmier":"I1","jour":0,"service":"matin","souhaite":true}]'>{{ etat.preferences_json }}</textarea>
+        </div>
+        <p class="m6-help">Exemple : <code>[{"infirmier":"I1","jour":0,"service":"matin","souhaite":true}]</code>. Le jour commence à 0; <code>souhaite: false</code> indique un service à éviter. Une pénalité par préférence peut remplacer la pénalité par défaut avec la clé <code>penalite</code>.</p>
+    </section>
+
+    <div class="m6-actions"><button class="m6-button m6-button-run" type="submit">Générer le planning</button></div>
+</form>
+
+{% if resultat %}
+<section class="m6-card" style="margin-top:1rem" aria-live="polite">
+    <h2>Résultat du solveur</h2>
+    <div class="m6-metrics">
+        <div class="m6-metric"><strong>Statut :</strong> <span class="m6-status {% if resultat.statut == 'faisable' %}m6-status-faisable{% elif resultat.statut == 'infaisable' %}m6-status-infaisable{% endif %}">{{ resultat.statut }}</span></div>
+        <div class="m6-metric"><strong>Objectif :</strong> {{ '%.2f'|format(resultat.objectif) }}</div>
+        <div class="m6-metric"><strong>Temps :</strong> {{ '%.3f'|format(resultat.temps) }} s</div>
+        {% if resultat.solution and resultat.solution.equite %}
+        <div class="m6-metric"><strong>Écart de charge :</strong> {{ '%.1f'|format(resultat.solution.equite.ecart_max_min_heures) }} h</div>
+        {% endif %}
+    </div>
+    {% if resultat.statut == 'infaisable' %}
+        <p>Aucun planning ne satisfait simultanément les besoins, les contrats, les repos et les indisponibilités. Essayez d'augmenter l'effectif ou d'ajuster les besoins.</p>
+    {% elif resultat.solution %}
+        <h3>Planning</h3>
+        <div class="m6-scroll">
+            <table class="m6-table">
+                <thead><tr><th>Infirmier</th>{% for jour in resultat.solution.jours %}<th>J{{ jour + 1 }}</th>{% endfor %}<th>Heures</th><th>Nuits</th></tr></thead>
+                <tbody>
+                    {% for ligne in resultat.solution.planning %}
+                    <tr>
+                        <th scope="row">{{ ligne.infirmier }}</th>
+                        {% for service in ligne.jours %}
+                        <td class="{% if service %}m6-shift-{{ service }}{% else %}m6-shift-repos{% endif %}">{% if service %}{{ libelles_services[service] }}{% else %}Repos{% endif %}</td>
+                        {% endfor %}
+                        <td>{{ resultat.solution.heures_par_infirmier[ligne.infirmier] }}</td>
+                        <td>{{ resultat.solution.nuits_par_infirmier[ligne.infirmier] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="m6-help" style="margin-top:.6rem">La moyenne est de {{ '%.1f'|format(resultat.solution.equite.moyenne_heures) }} heures par infirmier; l'écart maximal entre deux charges est de {{ '%.1f'|format(resultat.solution.equite.ecart_max_min_heures) }} heures.</p>
+    {% endif %}
 </section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function m6MajPeriode() {
+        const periode = Number(document.getElementById('nb_jours').value);
+        document.querySelectorAll('.m6-day-column').forEach(cellule => {
+            cellule.hidden = Number(cellule.dataset.day) >= periode;
+        });
+    }
+
+    function m6AjouterInfirmier() {
+        const corps = document.getElementById('m6-employees');
+        const numero = corps.querySelectorAll('tr').length + 1;
+        const ligne = document.createElement('tr');
+        ligne.className = 'm6-employee';
+        ligne.innerHTML = `<td><input name="infirmier_id[]" aria-label="Identifiant infirmier" value="I${numero}" required></td>
+            <td><input name="contrat[]" aria-label="Contrat" value="standard"></td>
+            <td><input name="max_jours[]" aria-label="Jours maximum par semaine" type="number" min="0" max="5" value="5" required></td>
+            <td><input name="max_heures[]" aria-label="Heures maximum par semaine" type="number" min="0" step="0.5" value="40" required></td>
+            <td><input name="indisponibilites[]" aria-label="Indices des jours indisponibles" placeholder="ex. 0, 4"></td>
+            <td><button class="m6-button m6-button-remove" type="button" onclick="m6SupprimerInfirmier(this)" aria-label="Supprimer l'infirmier">Supprimer</button></td>`;
+        corps.appendChild(ligne);
+    }
+
+    function m6SupprimerInfirmier(bouton) {
+        const lignes = document.querySelectorAll('#m6-employees tr');
+        if (lignes.length > 1) bouton.closest('tr').remove();
+    }
+
+    document.getElementById('nb_jours').addEventListener('change', m6MajPeriode);
+    m6MajPeriode();
+</script>
 {% endblock %}
