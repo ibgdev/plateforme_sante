@@ -1,13 +1,56 @@
 """Tests unitaires pour le module M2 (emplacement des ambulances)."""
 
+import pandas as pd
 import pytest
-from modules.m2_ambulances import solve
 
-EXPECTED_KEYS = {"statut", "objectif", "solution", "temps"}
+from modules.m2_ambulances import glouton, solve
+
+CLES_ATTENDUES = {"statut", "objectif", "solution", "temps"}
 
 
-@pytest.mark.skip(reason="Module M2 non encore implémenté")
-def test_m2_solve_contract():
-    """Vérifie que `solve` respecte le contrat de retour commun."""
-    result = solve(data={}, params={"nb_ambulances": 3, "rayon_minutes": 10})
-    assert EXPECTED_KEYS.issubset(result.keys())
+@pytest.fixture
+def data():
+    """Petit jeu de données : 4 communes, 3 bases d'ambulances et 1 site de clinique."""
+    df_communes = pd.DataFrame({
+        "id": [1, 2, 3, 4],
+        "nom": ["A", "B", "C", "D"],
+        "x": [-8, 7, 22, 36],
+        "y": [0, 3, 4, 5],
+        "population": [5000, 3000, 8000, 2000],
+    })
+    df_sites = pd.DataFrame({
+        "id": [1, 2, 3, 4],
+        "x": [0, 15, 30, 10],
+        "y": [0, 0, 0, 10],
+        "cout_fixe": [100, 120, 90, 80],
+        "type": ["base_ambulance", "base_ambulance", "base_ambulance", "clinique"],
+    })
+    return {"communes": df_communes, "sites_candidats": df_sites}
+
+
+def test_m2_solve_contrat(data):
+    """`solve` respecte le contrat de retour commun."""
+    resultat = solve(data, {"nb_ambulances": 2, "rayon_minutes": 10})
+    assert CLES_ATTENDUES.issubset(resultat.keys())
+
+
+def test_m2_solve_optimum(data):
+    """Avec R = 10 et K = 2, l'optimum couvre toute la population avec les bases 1 et 3."""
+    resultat = solve(data, {"nb_ambulances": 2, "rayon_minutes": 10})
+    assert resultat["statut"] == "optimal"
+    assert resultat["objectif"] == 18000
+    assert sorted(resultat["solution"]["bases_ouvertes"]) == [1, 3]
+
+
+def test_m2_rayon_trop_petit(data):
+    """Avec R = 5, aucune base n'atteint de commune : personne n'est couvert."""
+    resultat = solve(data, {"nb_ambulances": 3, "rayon_minutes": 5})
+    assert resultat["objectif"] == 0
+
+
+def test_m2_glouton_moins_bon(data):
+    """Le glouton trouve 16 000, moins bien que l'optimum de Gurobi (18 000)."""
+    exact = solve(data, {"nb_ambulances": 2, "rayon_minutes": 10})
+    approx = glouton(data, {"nb_ambulances": 2, "rayon_minutes": 10})
+    assert approx["objectif"] == 16000
+    assert approx["objectif"] <= exact["objectif"]
