@@ -72,3 +72,14 @@ def test_m2_toutes_les_bases_en_panne(data):
     resultat = solve(data, {"nb_ambulances": 2, "rayon_minutes": 10, "bases_en_panne": [1, 2, 3]})
     assert resultat["objectif"] == 0
     assert resultat["solution"]["bases_ouvertes"] == []
+
+
+
+def test_m2_hausse_demande_deplace_une_base(data):
+    """Avec 1 seule ambulance, on choisit la base 2 (B + C = 11 000).
+    Si la demande de D triple (+200 %), la base 3 devient meilleure (C + D = 8 000 + 6 000 = 14 000)."""
+    normal = solve(data, {"nb_ambulances": 1, "rayon_minutes": 10})
+    hausse = solve(data, {"nb_ambulances": 1, "rayon_minutes": 10, "hausse_demande": {"D": 200}})
+    assert normal["solution"]["bases_ouvertes"] == [2]
+    assert hausse["solution"]["bases_ouvertes"] == [3]
+    assert hausse["objectif"] == 14000

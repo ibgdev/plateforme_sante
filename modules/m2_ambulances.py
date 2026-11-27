@@ -53,6 +53,20 @@ def retirer_bases_en_panne(bases, params):
     return bases_actives
 
 
+def appliquer_hausse_demande(communes, params):
+    """Scénario de demande : augmente la demande h_i de certaines communes.
+
+    params["hausse_demande"] = {nom_commune: pourcentage}, par exemple {"Kerkennah": 400}
+    veut dire +400 %, donc la demande de Kerkennah est multipliée par 5.
+    """
+    hausses = params.get("hausse_demande", {})   # {} = pas de hausse par défaut
+    nouvelles_communes = {}
+    for nom, (x, y, population) in communes.items():
+        pourcentage = hausses.get(nom, 0)
+        nouvelles_communes[nom] = (x, y, population * (1 + pourcentage / 100))
+    return nouvelles_communes
+
+
 # =====================================================================
 # Méthode exacte : couverture maximale avec Gurobi
 # =====================================================================
@@ -65,10 +79,12 @@ def solve(data: dict, params: dict) -> dict:
         - rayon_minutes (float) : rayon de couverture R en minutes.
         - vitesse (float, optionnel) : vitesse moyenne en km/min (1.0 par défaut).
         - bases_en_panne (list, optionnel) : id des bases qui ne peuvent pas être ouvertes.
+        - hausse_demande (dict, optionnel) : {nom_commune: % de hausse de la demande}.
     """
     # --- Lire les entrées ---
     communes, bases = preparer_donnees(data)   # communes {nom: (x, y, pop)}, bases {id: (x, y)}
     bases = retirer_bases_en_panne(bases, params)   # une base en panne ne peut pas être ouverte
+    communes = appliquer_hausse_demande(communes, params)   # scénario de demande (été, épidémie…)
     population = {i: c[2] for i, c in communes.items()}
     R = params["rayon_minutes"]
     K = params["nb_ambulances"]
@@ -137,6 +153,7 @@ def glouton(data: dict, params: dict) -> dict:
     """Heuristique gloutonne : ajoute à chaque tour la base qui couvre le plus de nouvelle population."""
     communes, bases = preparer_donnees(data)
     bases = retirer_bases_en_panne(bases, params)
+    communes = appliquer_hausse_demande(communes, params)
     population = {i: c[2] for i, c in communes.items()}
     R = params["rayon_minutes"]
     K = params["nb_ambulances"]
