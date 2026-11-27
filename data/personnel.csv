@@ -1,0 +1,17 @@
+id,role,contrat,indisponibilites
+CHIR-1,chirurgien,temps_plein,11:00-12:00
+CHIR-2,chirurgien,temps_plein,08:00-09:00
+CHIR-3,chirurgien,temps_plein,14:00-15:00
+CHIR-4,chirurgien,temps_partiel,13:00-16:00
+I1,infirmier,standard,
+I2,infirmier,standard,
+I3,infirmier,standard,
+I4,infirmier,standard,
+I5,infirmier,standard,
+I6,infirmier,standard,
+I7,infirmier,standard,
+I8,infirmier,standard,
+I9,infirmier,standard,
+I10,infirmier,standard,
+I11,infirmier,standard,
+I12,infirmier,standard,

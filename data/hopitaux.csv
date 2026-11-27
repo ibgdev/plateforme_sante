@@ -1,0 +1,4 @@
+id,nom,x,y,nb_lits,nb_salles_operation
+H1,CHU Centre,10.0,15.0,120,4
+H2,Hôpital Nord,24.5,32.0,85,3
+H3,Clinique Sud,6.5,5.0,60,2

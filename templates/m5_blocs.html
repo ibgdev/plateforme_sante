@@ -6,25 +6,54 @@
 <style>
     .m5-form-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+        gap: 0.9rem;
         margin-top: 0.75rem;
     }
     .m5-field label {
         display: block;
         font-weight: 600;
         margin-bottom: 0.25rem;
-        font-size: 0.9rem;
+        font-size: 0.88rem;
     }
-    .m5-field input {
+    .m5-field input,
+    .m5-field select {
         width: 100%;
         padding: 0.45rem 0.6rem;
         border: 1px solid #cbd5e1;
         border-radius: 6px;
+        background: #ffffff;
+    }
+    .m5-sous-bloc {
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e2e8f0;
+    }
+    .m5-sous-bloc h3 {
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+        color: #0f172a;
+    }
+    .m5-hint {
+        font-size: 0.85rem;
+        color: #475569;
+        margin-bottom: 0.5rem;
+    }
+    .m5-csv-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 0.4rem;
+    }
+    .m5-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 0.75rem;
     }
     .m5-btn {
-        margin-top: 0.75rem;
-        padding: 0.6rem 1.25rem;
+        padding: 0.55rem 1.15rem;
         background-color: #155e75;
         color: #ffffff;
         border: none;
@@ -35,11 +64,30 @@
     .m5-btn:hover {
         background-color: #0e7490;
     }
+    .m5-btn-secondaire {
+        background-color: #e2e8f0;
+        color: #0f172a;
+    }
+    .m5-btn-secondaire:hover {
+        background-color: #cbd5e1;
+    }
+    .m5-btn-danger {
+        padding: 0.3rem 0.6rem;
+        background-color: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+        border-radius: 5px;
+        font-size: 0.82rem;
+        cursor: pointer;
+    }
+    .m5-btn-danger:hover {
+        background-color: #fecaca;
+    }
     .m5-kpis {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 0.75rem;
-        margin: 0.75rem 0 1rem;
+        margin: 0.75rem 0 1.25rem;
     }
     .m5-kpi {
         padding: 0.75rem;
@@ -47,23 +95,46 @@
         border: 1px solid #e2e8f0;
         border-radius: 6px;
     }
+    .m5-kpi span {
+        font-size: 0.82rem;
+        color: #475569;
+    }
     .m5-kpi strong {
         display: block;
         font-size: 1.1rem;
         color: #0f172a;
+        margin-top: 0.15rem;
     }
     .m5-table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 0.75rem;
+        margin-top: 0.5rem;
+        font-size: 0.92rem;
     }
-    .m5-table th, .m5-table td {
+    .m5-table th,
+    .m5-table td {
         text-align: left;
-        padding: 0.5rem 0.75rem;
+        padding: 0.45rem 0.6rem;
         border-bottom: 1px solid #e2e8f0;
     }
     .m5-table th {
         background: #f1f5f9;
+        font-weight: 600;
+    }
+    .m5-table input,
+    .m5-table select {
+        width: 100%;
+        padding: 0.35rem 0.45rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+    }
+    .m5-gantt {
+        margin: 1rem 0 1.25rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 0.5rem;
+        background: #ffffff;
+        overflow-x: auto;
     }
     .m5-alerte {
         margin-top: 0.75rem;
@@ -73,15 +144,44 @@
         border: 1px solid #fecaca;
         border-radius: 6px;
     }
+    .m5-info {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        background: #f0f9ff;
+        color: #075985;
+        border: 1px solid #bae6fd;
+        border-radius: 6px;
+    }
+    .m5-badge-sup {
+        display: inline-block;
+        padding: 0.1rem 0.45rem;
+        border-radius: 4px;
+        background: #fee2e2;
+        color: #991b1b;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <h1>M5 — Planning des blocs opératoires</h1>
 
-<form method="post" action="{{ url_for('m5.page_m5') }}">
+<form method="post" action="{{ url_for('m5.page_m5') }}" enctype="multipart/form-data">
+    <input type="hidden" name="indisponibilites_presentes" value="1">
+
     <section class="module-zone">
         <h2>1. Entrées</h2>
+
+        {% if hopitaux %}
+        <p class="m5-hint">
+            Capacités issues de <code>data/hopitaux.csv</code> :
+            {% for h in hopitaux %}
+                <strong>{{ h.nom }}</strong> ({{ h.nb_salles_operation }} salles){% if not loop.last %} · {% endif %}
+            {% endfor %}
+        </p>
+        {% endif %}
+
         <div class="m5-form-grid">
             <div class="m5-field">
                 <label for="nb_salles">Nombre de salles</label>
@@ -99,13 +199,125 @@
                 <label for="duree_creneau">Durée d'un créneau (min)</label>
                 <input id="duree_creneau" name="duree_creneau" type="number" min="10" max="120" step="5" value="{{ parametres.duree_creneau }}" required>
             </div>
+            <div class="m5-field">
+                <label for="max_heures_sup">Heures sup max / salle (h)</label>
+                <input id="max_heures_sup" name="max_heures_sup" type="number" min="0" max="6" step="0.5" value="{{ parametres.max_heures_sup }}" required>
+            </div>
+            <div class="m5-field">
+                <label for="mode_objectif">Fonction objectif</label>
+                <select id="mode_objectif" name="mode_objectif">
+                    <option value="makespan" {% if parametres.mode_objectif == 'makespan' %}selected{% endif %}>
+                        Fin de journée + heures sup
+                    </option>
+                    <option value="priorite" {% if parametres.mode_objectif == 'priorite' %}selected{% endif %}>
+                        Priorités pondérées + heures sup
+                    </option>
+                </select>
+            </div>
+        </div>
+
+        <div class="m5-sous-bloc">
+            <h3>Import d'un fichier CSV d'opérations</h3>
+            <p class="m5-hint">
+                Format attendu : colonnes <code>id,duree,chirurgien,priorite</code> (durée en minutes, priorité 1 = urgente à 3 = normale).
+                <a href="{{ url_for('m5.telecharger_exemple_csv') }}">Télécharger un CSV d'exemple</a>
+            </p>
+            <div class="m5-csv-bar">
+                <input type="file" id="fichier_csv" name="fichier_csv" accept=".csv">
+                <button class="m5-btn m5-btn-secondaire" type="submit" name="action" value="importer_csv">
+                    Importer le CSV et résoudre
+                </button>
+            </div>
+        </div>
+
+        <div class="m5-sous-bloc">
+            <h3>Opérations à planifier ({{ operations | length }})</h3>
+            <table class="m5-table" id="table-operations">
+                <thead>
+                    <tr>
+                        <th>ID Opération</th>
+                        <th>Durée (min)</th>
+                        <th>Chirurgien</th>
+                        <th>Priorité (1=Urgente)</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-operations">
+                    {% for op in operations %}
+                    <tr>
+                        <td><input type="text" name="op_id[]" value="{{ op.id }}" required></td>
+                        <td><input type="number" name="op_duree[]" min="15" max="480" step="15" value="{{ op.duree }}" required></td>
+                        <td><input type="text" name="op_chirurgien[]" value="{{ op.chirurgien }}" required></td>
+                        <td>
+                            <select name="op_priorite[]">
+                                <option value="1" {% if op.priorite == 1 %}selected{% endif %}>1 — Urgente</option>
+                                <option value="2" {% if op.priorite == 2 %}selected{% endif %}>2 — Moyenne</option>
+                                <option value="3" {% if op.priorite == 3 %}selected{% endif %}>3 — Normale</option>
+                            </select>
+                        </td>
+                        <td><button type="button" class="m5-btn-danger" onclick="supprimerLigne(this)">Supprimer</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="m5-actions">
+                <button type="button" class="m5-btn m5-btn-secondaire" onclick="ajouterOperation()">
+                    + Ajouter une opération
+                </button>
+            </div>
+        </div>
+
+        <div class="m5-sous-bloc">
+            <h3>Indisponibilités des chirurgiens</h3>
+            <p class="m5-hint">Format horaire <code>HH:MM</code> (ex. <code>11:00</code> à <code>12:00</code>), pré-rempli depuis <code>data/personnel.csv</code>.</p>
+            <table class="m5-table" id="table-indispos">
+                <thead>
+                    <tr>
+                        <th>Chirurgien</th>
+                        <th>Début (HH:MM)</th>
+                        <th>Fin (HH:MM)</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-indispos">
+                    {% for ind in indisponibilites %}
+                    <tr>
+                        <td><input type="text" name="indisp_chirurgien[]" value="{{ ind.chirurgien }}" required></td>
+                        <td><input type="text" name="indisp_debut[]" value="{{ ind.debut }}" placeholder="11:00" required></td>
+                        <td><input type="text" name="indisp_fin[]" value="{{ ind.fin }}" placeholder="12:00" required></td>
+                        <td><button type="button" class="m5-btn-danger" onclick="supprimerLigne(this)">Supprimer</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="m5-actions">
+                <button type="button" class="m5-btn m5-btn-secondaire" onclick="ajouterIndisponibilite()">
+                    + Ajouter une indisponibilité
+                </button>
+            </div>
         </div>
     </section>
 
     <section class="module-zone">
         <h2>2. Résolution</h2>
-        <p>Modèle initial d'ordonnancement résolu via Gurobi (jeu d'opérations de démonstration en attendant les CSV communs).</p>
-        <button class="m5-btn" type="submit">Résoudre le planning</button>
+        <p class="m5-hint">
+            Résolution exacte via <strong>Gurobi (PLNE)</strong> avec comparaison automatique à une <strong>heuristique gloutonne (Priorité / LPT)</strong>.
+        </p>
+        <div class="m5-actions">
+            <button class="m5-btn" type="submit" name="action" value="resoudre">
+                Résoudre le planning (Gurobi)
+            </button>
+            <button class="m5-btn m5-btn-secondaire" type="submit" name="action" value="scenario_sature">
+                Scénario saturé (heures sup)
+            </button>
+            <button class="m5-btn m5-btn-secondaire" type="submit" name="action" value="reinitialiser" formnovalidate>
+                Réinitialiser (data/*.csv)
+            </button>
+        </div>
+
+        {% if info %}
+        <div class="m5-info">{{ info }}</div>
+        {% endif %}
         {% if erreur %}
         <div class="m5-alerte">{{ erreur }}</div>
         {% endif %}
@@ -121,12 +333,20 @@
                 <strong>{{ resultat.statut }}</strong>
             </div>
             <div class="m5-kpi">
-                <span>Durée journée (min)</span>
+                <span>Valeur objectif</span>
                 <strong>{{ resultat.objectif }}</strong>
+            </div>
+            <div class="m5-kpi">
+                <span>Fin de journée</span>
+                <strong>{{ resultat.solution.fin_journee_heure }}</strong>
             </div>
             <div class="m5-kpi">
                 <span>Occupation globale</span>
                 <strong>{{ resultat.solution.taux_occupation.global }} %</strong>
+            </div>
+            <div class="m5-kpi">
+                <span>Heures sup totales</span>
+                <strong>{{ resultat.solution.heures_sup }} h</strong>
             </div>
             <div class="m5-kpi">
                 <span>Temps de calcul</span>
@@ -134,40 +354,163 @@
             </div>
         </div>
 
+        {% if graph_html %}
+        <div class="m5-gantt">
+            {{ graph_html | safe }}
+        </div>
+        {% endif %}
+
         {% if resultat.solution.planning %}
-        <table class="m5-table">
-            <thead>
-                <tr>
-                    <th>Salle</th>
-                    <th>Opération</th>
-                    <th>Chirurgien</th>
-                    <th>Priorité</th>
-                    <th>Début</th>
-                    <th>Fin</th>
-                    <th>Durée (min)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for op in resultat.solution.planning %}
-                <tr>
-                    <td>{{ op.salle }}</td>
-                    <td>{{ op.id }}</td>
-                    <td>{{ op.chirurgien }}</td>
-                    <td>{{ op.priorite }}</td>
-                    <td>{{ op.debut }}</td>
-                    <td>{{ op.fin }}</td>
-                    <td>{{ op.duree_min }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="m5-sous-bloc">
+            <h3>Synthèse par salle</h3>
+            <table class="m5-table">
+                <thead>
+                    <tr>
+                        <th>Salle</th>
+                        <th>Taux d'occupation</th>
+                        <th>Heures supplémentaires</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for salle, taux in resultat.solution.taux_occupation.items() %}
+                        {% if salle != 'global' %}
+                        <tr>
+                            <td>{{ salle }}</td>
+                            <td>{{ taux }} %</td>
+                            <td>{{ resultat.solution.heures_sup_par_salle.get(salle, 0.0) }} h</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if resultat.solution.comparaison %}
+        <div class="m5-sous-bloc">
+            <h3>Comparaison Gurobi vs Heuristique gloutonne</h3>
+            <table class="m5-table">
+                <thead>
+                    <tr>
+                        <th>Méthode</th>
+                        <th>Statut</th>
+                        <th>Objectif</th>
+                        <th>Fin de journée</th>
+                        <th>Heures sup</th>
+                        <th>Temps (s)</th>
+                        <th>Écart vs Gurobi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in resultat.solution.comparaison.methodes %}
+                    <tr>
+                        <td><strong>{{ m.nom }}</strong></td>
+                        <td>{{ m.statut }}</td>
+                        <td>{{ m.objectif }}</td>
+                        <td>{{ m.fin_journee_heure }}</td>
+                        <td>{{ m.heures_sup }} h</td>
+                        <td>{{ m.temps }} s</td>
+                        <td>
+                            {% if m.ecart_pct is not none %}
+                                {{ "%+.2f" | format(m.ecart_pct) }} %
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <div class="m5-sous-bloc">
+            <h3>Planning détaillé par salle</h3>
+            <table class="m5-table">
+                <thead>
+                    <tr>
+                        <th>Salle</th>
+                        <th>Opération</th>
+                        <th>Chirurgien</th>
+                        <th>Priorité</th>
+                        <th>Début</th>
+                        <th>Fin</th>
+                        <th>Durée (min)</th>
+                        <th>Heures sup</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for op in resultat.solution.planning %}
+                    <tr>
+                        <td>{{ op.salle }}</td>
+                        <td>{{ op.id }}</td>
+                        <td>{{ op.chirurgien }}</td>
+                        <td>{{ op.priorite }}</td>
+                        <td>{{ op.debut }}</td>
+                        <td>{{ op.fin }}</td>
+                        <td>{{ op.duree_min }}</td>
+                        <td>
+                            {% if op.en_heures_sup %}
+                                <span class="m5-badge-sup">Oui</span>
+                            {% else %}
+                                Non
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
         <div class="m5-alerte">
             Aucun planning généré ({{ resultat.solution.message or "problème infaisable" }}).
         </div>
         {% endif %}
     {% else %}
-        <p>Lancez la résolution ci-dessus pour calculer un premier planning des blocs opératoires (le diagramme de Gantt Plotly sera intégré dans la prochaine itération).</p>
+        <p>Réglez les paramètres ci-dessus puis cliquez sur <strong>Résoudre le planning (Gurobi)</strong> pour afficher le diagramme de Gantt, les taux d'occupation, les heures supplémentaires et la comparaison avec l'heuristique.</p>
     {% endif %}
 </section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function supprimerLigne(bouton) {
+    const ligne = bouton.closest("tr");
+    if (ligne) {
+        ligne.remove();
+    }
+}
+
+function ajouterOperation() {
+    const tbody = document.getElementById("tbody-operations");
+    const numero = tbody.querySelectorAll("tr").length + 1;
+    const idAuto = "OP-" + String(numero).padStart(2, "0");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+        <td><input type="text" name="op_id[]" value="${idAuto}" required></td>
+        <td><input type="number" name="op_duree[]" min="15" max="480" step="15" value="60" required></td>
+        <td><input type="text" name="op_chirurgien[]" value="CHIR-1" required></td>
+        <td>
+            <select name="op_priorite[]">
+                <option value="1">1 — Urgente</option>
+                <option value="2" selected>2 — Moyenne</option>
+                <option value="3">3 — Normale</option>
+            </select>
+        </td>
+        <td><button type="button" class="m5-btn-danger" onclick="supprimerLigne(this)">Supprimer</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function ajouterIndisponibilite() {
+    const tbody = document.getElementById("tbody-indispos");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+        <td><input type="text" name="indisp_chirurgien[]" value="CHIR-1" required></td>
+        <td><input type="text" name="indisp_debut[]" value="10:00" placeholder="10:00" required></td>
+        <td><input type="text" name="indisp_fin[]" value="11:00" placeholder="11:00" required></td>
+        <td><button type="button" class="m5-btn-danger" onclick="supprimerLigne(this)">Supprimer</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+</script>
 {% endblock %}
