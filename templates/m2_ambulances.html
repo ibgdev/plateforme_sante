@@ -2,21 +2,323 @@
 
 {% block title %}M2 — Emplacement des ambulances{% endblock %}
 
+{# Petit raccourci : écrit 518000 sous la forme « 518 000 » #}
+{% macro nombre(valeur) %}{{ "{:,.0f}".format(valeur).replace(",", " ") }}{% endmacro %}
+
+{% block extra_css %}
+<style>
+    .m2-carte { padding: 1.1rem; margin-bottom: 1rem; background: #fff; border: 1px solid #dbe3ea; border-radius: 10px; }
+    .m2-carte h2 { margin-bottom: .75rem; font-size: 1.15rem; }
+    .m2-champ { display: inline-flex; flex-direction: column; margin-right: 1rem; font-weight: 650; }
+    .m2-champ input, .m2-champ select { padding: .4rem; border: 1px solid #cbd5e1; border-radius: 5px; width: 12rem; font: inherit; }
+    .m2-bouton { padding: .6rem 1.1rem; border: 0; border-radius: 5px; background: #155e75; color: #fff; font-weight: 650; cursor: pointer; }
+    .m2-petit { padding: .35rem .7rem; border: 0; border-radius: 5px; cursor: pointer; font-weight: 650; }
+    .m2-ajouter { background: #e0f2fe; color: #075985; }
+    .m2-supprimer { background: #fee2e2; color: #991b1b; }
+    .m2-table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-bottom: .5rem; }
+    .m2-table th, .m2-table td { border: 1px solid #e2e8f0; padding: .4rem; text-align: center; }
+    .m2-table th { background: #f1f5f9; }
+    .m2-table input[type=text], .m2-table input[type=number] { width: 100%; padding: .3rem; border: 1px solid #cbd5e1; border-radius: 4px; }
+    .m2-deux { display: grid; grid-template-columns: 3fr 2fr; gap: 1rem; }
+    #table-communes td:first-child input { min-width: 10rem; }
+    .m2-oui { color: #166534; font-weight: 700; }
+    .m2-non { color: #991b1b; font-weight: 700; }
+    .m2-aide { color: #64748b; font-size: .85rem; margin: .4rem 0; }
+    .m2-hausse { color: #b45309; font-weight: 700; }
+    .m2-erreur { padding: .8rem 1rem; margin-bottom: 1rem; background: #fef2f2; color: #991b1b; border-left: 6px solid #dc2626; border-radius: 8px; }
+
+    /* Tuile vedette : population couverte */
+    .m2-vedette { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 1rem; }
+    .m2-tuile { padding: 1rem; background: #f8fafc; border-radius: 10px; }
+    .m2-tuile span { display: block; color: #64748b; font-size: .85rem; }
+    .m2-tuile strong { font-size: 1.5rem; color: #0f172a; }
+    .m2-gros { font-size: 2.6rem !important; color: #155e75 !important; }
+    .m2-fond { height: .8rem; margin: .5rem 0 .3rem; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
+    .m2-barre { height: 100%; border-radius: 999px; }
+    .m2-vert { background: #16a34a; }  .m2-orange { background: #f59e0b; }  .m2-rouge { background: #dc2626; }
+    .m2-badge { display: inline-block; margin-top: .4rem; padding: .2rem .7rem; border-radius: 999px; font-weight: 700; font-size: .9rem; }
+    .m2-badge-mal { background: #fee2e2; color: #991b1b; }
+    .m2-badge-bien { background: #dcfce7; color: #166534; }
+
+    /* Alerte */
+    .m2-alerte { padding: .9rem 1rem; margin-bottom: 1rem; background: #fef2f2; color: #991b1b;
+                 border: 1px solid #fecaca; border-left: 6px solid #dc2626; border-radius: 8px; font-size: 1.05rem; }
+    .m2-moins { color: #991b1b; font-weight: 700; }
+
+    /* Carte */
+    .m2-iframe { width: 100%; height: 480px; border: 1px solid #dbe3ea; border-radius: 8px; }
+    .m2-legende { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-bottom: .6rem; font-size: .88rem; color: #475569; }
+    .m2-point { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; margin-right: .3rem; vertical-align: -1px; }
+
+    @media (max-width: 900px) { .m2-vedette, .m2-deux { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>M2 — Emplacement des ambulances</h1>
+<p>Placer K ambulances pour couvrir le plus d'habitants possible en moins de R minutes.</p>
 
-<section class="module-zone">
-    <h2>1. Entrées</h2>
-    <p>TODO (Responsable M2) : paramètres K et R, tableau modifiable des zones et bases candidates, import CSV.</p>
+{% if erreur %}<p class="m2-erreur">{{ erreur }}</p>{% endif %}
+
+<!-- ===== 1. Entrées ===== -->
+<form method="post" enctype="multipart/form-data">
+    <section class="m2-carte">
+        <h2>Paramètres</h2>
+        <label class="m2-champ">Nombre d'ambulances K
+            <input name="nb_ambulances" type="number" min="1" value="{{ K }}">
+        </label>
+        <label class="m2-champ">Rayon R (minutes)
+            <input name="rayon_minutes" type="number" min="1" step="0.5" value="{{ '%g'|format(R) }}">
+        </label>
+        <label class="m2-champ">Scénario de demande
+            <select name="scenario" id="scenario" onchange="choisirScenario(this.value)">
+                {% for cle, s in scenarios.items() %}
+                <option value="{{ cle }}" {% if cle == scenario %}selected{% endif %}>{{ s.titre }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <p class="m2-aide">Le scénario remplit la colonne « Hausse (%) » des communes. Vous pouvez ensuite la modifier à la main.</p>
+    </section>
+
+    <div class="m2-deux">
+        <!-- Tableau des communes -->
+        <section class="m2-carte">
+            <h2>Communes</h2>
+            <table class="m2-table" id="table-communes">
+                <thead><tr><th>Nom</th><th>x (km)</th><th>y (km)</th><th>Population</th><th>Hausse (%)</th><th></th></tr></thead>
+                <tbody>
+                    {% for c in communes %}
+                    <tr>
+                        <td><input type="text" name="commune_nom" value="{{ c.nom }}"></td>
+                        <td><input type="number" step="any" name="commune_x" value="{{ '%g'|format(c.x) }}"></td>
+                        <td><input type="number" step="any" name="commune_y" value="{{ '%g'|format(c.y) }}"></td>
+                        <td><input type="number" min="0" name="commune_population" value="{{ '%g'|format(c.population) }}"></td>
+                        <td><input type="number" step="any" name="commune_hausse" value="{{ '%g'|format(c.hausse) }}"></td>
+                        <td><button type="button" class="m2-petit m2-supprimer" onclick="supprimerLigne(this)">✕</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="m2-petit m2-ajouter" onclick="ajouterLigne('table-communes')">+ Ajouter une commune</button>
+            <p class="m2-aide">Ou importer un CSV (colonnes : nom, x, y, population) — il remplace le tableau :</p>
+            <input type="file" name="csv_communes" accept=".csv">
+        </section>
+
+        <!-- Tableau des bases -->
+        <section class="m2-carte">
+            <h2>Bases candidates</h2>
+            <table class="m2-table" id="table-bases">
+                <thead><tr><th>Base</th><th>x (km)</th><th>y (km)</th><th>En panne ?</th><th></th></tr></thead>
+                <tbody>
+                    {% for b in bases %}
+                    <tr>
+                        <td><input type="text" name="base_id" value="{{ b.id }}"></td>
+                        <td><input type="number" step="any" name="base_x" value="{{ '%g'|format(b.x) }}"></td>
+                        <td><input type="number" step="any" name="base_y" value="{{ '%g'|format(b.y) }}"></td>
+                        <td>
+                            <input type="checkbox" onchange="changerPanne(this)" {% if b.en_panne %}checked{% endif %}>
+                            <input type="hidden" name="base_panne" value="{{ '1' if b.en_panne else '0' }}">
+                        </td>
+                        <td><button type="button" class="m2-petit m2-supprimer" onclick="supprimerLigne(this)">✕</button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="m2-petit m2-ajouter" onclick="ajouterLigne('table-bases')">+ Ajouter une base</button>
+            <p class="m2-aide">Ou importer un CSV (colonnes : id, x, y) — il remplace le tableau :</p>
+            <input type="file" name="csv_bases" accept=".csv">
+        </section>
+    </div>
+
+    <p><button class="m2-bouton" type="submit">Résoudre</button></p>
+</form>
+
+{% if resultat %}
+{% set couverte = resultat.objectif %}
+{% set sans_ambulance = demande_scenario - couverte %}
+{% set taux = 100 * couverte / demande_scenario if demande_scenario else 0 %}
+
+<!-- ===== 2. Alerte si la couverture est trop faible ===== -->
+{% if taux < 70 %}
+<p class="m2-alerte" style="margin-top: 1rem;">⚠ <strong>Couverture insuffisante ({{ "%.1f"|format(taux) }} %)</strong> :
+    {{ nombre(sans_ambulance) }} habitants n'ont pas d'ambulance en moins de {{ '%g'|format(R) }} minutes.</p>
+{% endif %}
+
+<!-- ===== 3. Tuile vedette : population couverte ===== -->
+<section class="m2-carte" style="margin-top: 1rem;">
+    <div class="m2-vedette">
+        <div class="m2-tuile">
+            <span>Population couverte</span>
+            <strong class="m2-gros">{{ nombre(couverte) }}</strong>
+            <span>sur {{ nombre(demande_scenario) }} habitants — <strong style="font-size:1rem">{{ "%.1f"|format(taux) }} %</strong></span>
+            <div class="m2-fond">
+                <div class="m2-barre {% if taux >= 90 %}m2-vert{% elif taux >= 70 %}m2-orange{% else %}m2-rouge{% endif %}"
+                     style="width: {{ taux }}%"></div>
+            </div>
+            {% if reference %}
+            {# On compare les habitants SANS ambulance : c'est ce qui compte pour la sécurité #}
+            {% set sans_normal = population_normale - reference.objectif %}
+            {% set ecart = sans_ambulance - sans_normal %}
+            {% if ecart > 0 %}
+            <span class="m2-badge m2-badge-mal">▲ {{ nombre(ecart) }} habitants sans ambulance de plus qu'en situation normale</span>
+            {% else %}
+            <span class="m2-badge m2-badge-bien">Pas plus d'habitants sans ambulance qu'en situation normale</span>
+            {% endif %}
+            {% endif %}
+        </div>
+        <div class="m2-tuile">
+            <span>Sans ambulance</span>
+            <strong class="m2-non">{{ nombre(sans_ambulance) }}</strong>
+        </div>
+        <div class="m2-tuile">
+            <span>Bases ouvertes</span>
+            <strong>{{ resultat.solution.bases_ouvertes|join(", ") or "aucune" }}</strong>
+        </div>
+        <div class="m2-tuile">
+            <span>Temps de calcul</span>
+            <strong>{{ resultat.temps }} s</strong>
+        </div>
+    </div>
 </section>
 
-<section class="module-zone">
-    <h2>2. Résolution</h2>
-    <p>TODO (Responsable M2) : bouton Résoudre appelant <code>modules.m2_ambulances.solve</code>.</p>
+<!-- ===== 4. Impact du scénario (panne et/ou hausse de demande) ===== -->
+{% if reference %}
+{% set pannes = bases|selectattr("en_panne")|map(attribute="id")|join(", ") %}
+{% set hausses = [] %}
+{% for c in communes if c.hausse != 0 %}{% set _ = hausses.append(c.nom ~ " " ~ "%+g"|format(c.hausse) ~ " %") %}{% endfor %}
+{% set sans_normal = population_normale - reference.objectif %}
+<section class="m2-carte">
+    <h2>Impact du scénario sur la couverture</h2>
+    <p class="m2-aide" style="margin: -.4rem 0 .8rem;">
+        Comparaison entre la situation normale et le scénario :
+        {% if pannes %}base {{ pannes }} en panne{% endif %}{% if pannes and hausses %} ; {% endif -%}
+        {% if hausses %}demande {{ hausses|join(", ") }}{% endif %}.
+    </p>
+    <table class="m2-table">
+        <tr><th></th><th>Situation normale</th><th>Avec le scénario</th><th>Écart</th></tr>
+        <tr><td>Demande totale (habitants)</td>
+            <td>{{ nombre(population_normale) }}</td>
+            <td>{{ nombre(demande_scenario) }}</td>
+            <td>{{ "{:+,.0f}".format(demande_scenario - population_normale).replace(",", " ") }}</td></tr>
+        <tr><td>Habitants couverts</td>
+            <td>{{ nombre(reference.objectif) }}</td>
+            <td>{{ nombre(couverte) }}</td>
+            <td>{{ "{:+,.0f}".format(couverte - reference.objectif).replace(",", " ") }}</td></tr>
+        <tr><td><strong>Habitants sans ambulance</strong></td>
+            <td>{{ nombre(sans_normal) }}</td>
+            <td>{{ nombre(sans_ambulance) }}</td>
+            <td class="{% if sans_ambulance > sans_normal %}m2-moins{% endif %}">{{ "{:+,.0f}".format(sans_ambulance - sans_normal).replace(",", " ") }}</td></tr>
+        <tr><td>Taux de couverture</td>
+            <td>{{ "%.1f"|format(100 * reference.objectif / population_normale) }} %</td>
+            <td>{{ "%.1f"|format(taux) }} %</td>
+            <td>{{ "%+.1f"|format(taux - 100 * reference.objectif / population_normale) }} points</td></tr>
+        <tr><td>Bases ouvertes</td>
+            <td>{{ reference.solution.bases_ouvertes|join(", ") }}</td>
+            <td>{{ resultat.solution.bases_ouvertes|join(", ") or "aucune" }}</td>
+            <td></td></tr>
+    </table>
+</section>
+{% endif %}
+
+<!-- ===== 5. Carte ===== -->
+<section class="m2-carte">
+    <h2>Carte de couverture</h2>
+    <div class="m2-legende">
+        <span><span class="m2-point" style="background:#16a34a"></span>Commune couverte</span>
+        <span><span class="m2-point" style="background:#dc2626"></span>Commune non couverte</span>
+        <span>🟢 Base ouverte (cercle = {{ '%g'|format(R) }} min)</span>
+        <span>⚪ Base fermée</span>
+        <span>🔴 Base en panne</span>
+    </div>
+    <iframe class="m2-iframe" srcdoc="{{ carte_html }}"></iframe>
 </section>
 
-<section class="module-zone">
-    <h2>3. Résultats</h2>
-    <p>TODO (Responsable M2) : bases choisies, taux de couverture, carte Folium avec cercles, temps de calcul.</p>
+<!-- ===== 6. Communes ===== -->
+<section class="m2-carte">
+    <h2>Communes</h2>
+    <table class="m2-table">
+        <tr><th>Commune</th><th>Population</th><th>Hausse</th><th>Demande du scénario</th><th>Couverte ?</th></tr>
+        {% for c in communes %}
+        <tr>
+            <td>{{ c.nom }}</td>
+            <td>{{ nombre(c.population) }}</td>
+            <td>{% if c.hausse %}<span class="m2-hausse">{{ "%+g"|format(c.hausse) }} %</span>{% else %}—{% endif %}</td>
+            <td>{{ nombre(c.population * (1 + c.hausse / 100)) }}</td>
+            {% if c.nom in resultat.solution.communes_couvertes %}
+            <td class="m2-oui">Oui</td>
+            {% else %}
+            <td class="m2-non">Non</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </table>
 </section>
+
+<!-- ===== 7. Gurobi contre glouton ===== -->
+<section class="m2-carte">
+    <h2>Gurobi contre glouton</h2>
+    <table class="m2-table">
+        <tr><th></th><th>Gurobi (exact)</th><th>Glouton (heuristique)</th></tr>
+        <tr><td>Bases ouvertes</td>
+            <td>{{ resultat.solution.bases_ouvertes|join(", ") }}</td>
+            <td>{{ resultat_glouton.solution.bases_ouvertes|join(", ") }}</td></tr>
+        <tr><td>Population couverte</td>
+            <td>{{ nombre(resultat.objectif) }}</td>
+            <td>{{ nombre(resultat_glouton.objectif) }}</td></tr>
+    </table>
+</section>
+{% endif %}
+
+<!-- Lignes vides copiées par les boutons « + Ajouter » -->
+<template id="table-communes-modele">
+    <tr>
+        <td><input type="text" name="commune_nom"></td>
+        <td><input type="number" step="any" name="commune_x" value="0"></td>
+        <td><input type="number" step="any" name="commune_y" value="0"></td>
+        <td><input type="number" min="0" name="commune_population" value="0"></td>
+        <td><input type="number" step="any" name="commune_hausse" value="0"></td>
+        <td><button type="button" class="m2-petit m2-supprimer" onclick="supprimerLigne(this)">✕</button></td>
+    </tr>
+</template>
+<template id="table-bases-modele">
+    <tr>
+        <td><input type="text" name="base_id"></td>
+        <td><input type="number" step="any" name="base_x" value="0"></td>
+        <td><input type="number" step="any" name="base_y" value="0"></td>
+        <td><input type="checkbox" onchange="changerPanne(this)"><input type="hidden" name="base_panne" value="0"></td>
+        <td><button type="button" class="m2-petit m2-supprimer" onclick="supprimerLigne(this)">✕</button></td>
+    </tr>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Les scénarios définis dans la route : {"ete": {"titre": ..., "hausses": {"Kerkennah": 400, ...}}, ...}
+    const SCENARIOS = {{ scenarios|tojson }};
+
+    // Remplit la colonne « Hausse (%) » selon le scénario choisi (0 pour les autres communes)
+    function choisirScenario(cle) {
+        const hausses = SCENARIOS[cle].hausses;
+        document.querySelectorAll("#table-communes tbody tr").forEach(ligne => {
+            const nom = ligne.querySelector("[name=commune_nom]").value.trim();
+            ligne.querySelector("[name=commune_hausse]").value = hausses[nom] || 0;
+        });
+    }
+
+    // Ajoute une ligne vide (copie du modèle) à la fin du tableau
+    function ajouterLigne(idTable) {
+        const modele = document.getElementById(idTable + "-modele");
+        document.querySelector("#" + idTable + " tbody").appendChild(modele.content.cloneNode(true));
+    }
+
+    // Supprime la ligne qui contient le bouton cliqué
+    function supprimerLigne(bouton) {
+        bouton.closest("tr").remove();
+    }
+
+    // Une case non cochée n'est pas envoyée : on recopie son état (1 ou 0) dans le champ caché voisin
+    function changerPanne(caseACocher) {
+        caseACocher.nextElementSibling.value = caseACocher.checked ? "1" : "0";
+    }
+</script>
 {% endblock %}
