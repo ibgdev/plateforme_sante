@@ -43,6 +43,16 @@ def preparer_donnees(data):
     return communes, bases
 
 
+def retirer_bases_en_panne(bases, params):
+    """Étape 2 : enlève les bases en panne de la liste des bases candidates."""
+    bases_en_panne = params.get("bases_en_panne", [])   # [] = aucune panne par défaut
+    bases_actives = {}
+    for j, position in bases.items():
+        if j not in bases_en_panne:
+            bases_actives[j] = position
+    return bases_actives
+
+
 # =====================================================================
 # Méthode exacte : couverture maximale avec Gurobi
 # =====================================================================
@@ -54,9 +64,11 @@ def solve(data: dict, params: dict) -> dict:
         - nb_ambulances (int) : nombre K de bases à activer.
         - rayon_minutes (float) : rayon de couverture R en minutes.
         - vitesse (float, optionnel) : vitesse moyenne en km/min (1.0 par défaut).
+        - bases_en_panne (list, optionnel) : id des bases qui ne peuvent pas être ouvertes.
     """
     # --- Lire les entrées ---
     communes, bases = preparer_donnees(data)   # communes {nom: (x, y, pop)}, bases {id: (x, y)}
+    bases = retirer_bases_en_panne(bases, params)   # une base en panne ne peut pas être ouverte
     population = {i: c[2] for i, c in communes.items()}
     R = params["rayon_minutes"]
     K = params["nb_ambulances"]
@@ -124,6 +136,7 @@ def solve(data: dict, params: dict) -> dict:
 def glouton(data: dict, params: dict) -> dict:
     """Heuristique gloutonne : ajoute à chaque tour la base qui couvre le plus de nouvelle population."""
     communes, bases = preparer_donnees(data)
+    bases = retirer_bases_en_panne(bases, params)
     population = {i: c[2] for i, c in communes.items()}
     R = params["rayon_minutes"]
     K = params["nb_ambulances"]

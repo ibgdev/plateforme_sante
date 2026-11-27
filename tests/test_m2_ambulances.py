@@ -54,3 +54,21 @@ def test_m2_glouton_moins_bon(data):
     approx = glouton(data, {"nb_ambulances": 2, "rayon_minutes": 10})
     assert approx["objectif"] == 16000
     assert approx["objectif"] <= exact["objectif"]
+
+def test_m2_panne_base_1(data):
+    """Si la base 1 est en panne, on ouvre les bases 2 et 3 : A n'est plus couverte (13 000 au lieu de 18 000)."""
+    params = {"nb_ambulances": 2, "rayon_minutes": 10, "bases_en_panne": [1]}
+    resultat = solve(data, params)
+    assert 1 not in resultat["solution"]["bases_ouvertes"]
+    assert resultat["objectif"] == 13000
+    assert "A" not in resultat["solution"]["communes_couvertes"]
+    # Le glouton ne doit pas non plus utiliser la base en panne
+    approx = glouton(data, params)
+    assert 1 not in approx["solution"]["bases_ouvertes"]
+
+
+def test_m2_toutes_les_bases_en_panne(data):
+    """Si toutes les bases sont en panne, personne n'est couvert (et le programme ne plante pas)."""
+    resultat = solve(data, {"nb_ambulances": 2, "rayon_minutes": 10, "bases_en_panne": [1, 2, 3]})
+    assert resultat["objectif"] == 0
+    assert resultat["solution"]["bases_ouvertes"] == []

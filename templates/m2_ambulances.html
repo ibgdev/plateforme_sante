@@ -2,21 +2,201 @@
 
 {% block title %}M2 — Emplacement des ambulances{% endblock %}
 
+{% block extra_css %}
+<style>
+    .m2-carte { padding: 1.1rem; margin-bottom: 1rem; background: #fff; border: 1px solid #dbe3ea; border-radius: 10px; }
+    .m2-carte h2 { margin-bottom: .75rem; font-size: 1.15rem; }
+    .m2-carte h3 { margin: 1rem 0 .5rem; font-size: 1rem; }
+    .m2-champ { display: inline-flex; flex-direction: column; margin-right: 1rem; font-weight: 650; }
+    .m2-champ input { padding: .4rem; border: 1px solid #cbd5e1; border-radius: 5px; width: 8rem; }
+    .m2-bouton { padding: .6rem 1.1rem; border: 0; border-radius: 5px; background: #155e75; color: #fff; font-weight: 650; cursor: pointer; }
+    .m2-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .m2-table th, .m2-table td { border: 1px solid #e2e8f0; padding: .4rem; text-align: center; }
+    .m2-table th { background: #f1f5f9; }
+    .m2-oui { color: #166534; font-weight: 700; }
+    .m2-non { color: #991b1b; font-weight: 700; }
+    .m2-aide { color: #64748b; font-size: .85rem; margin-top: .4rem; }
+
+    /* Tuile vedette : population couverte */
+    .m2-vedette { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 1rem; }
+    .m2-tuile { padding: 1rem; background: #f8fafc; border-radius: 10px; }
+    .m2-tuile span { display: block; color: #64748b; font-size: .85rem; }
+    .m2-tuile strong { font-size: 1.5rem; color: #0f172a; }
+    .m2-gros { font-size: 2.6rem !important; color: #155e75 !important; }
+    .m2-fond { height: .8rem; margin: .5rem 0 .3rem; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
+    .m2-barre { height: 100%; border-radius: 999px; }
+    .m2-vert { background: #16a34a; }  .m2-orange { background: #f59e0b; }  .m2-rouge { background: #dc2626; }
+    .m2-badge { display: inline-block; margin-top: .4rem; padding: .2rem .7rem; border-radius: 999px; font-weight: 700; font-size: .9rem; }
+    .m2-badge-baisse { background: #fee2e2; color: #991b1b; }
+    .m2-badge-egal { background: #dcfce7; color: #166534; }
+
+    /* Alerte */
+    .m2-alerte { padding: .9rem 1rem; margin-bottom: 1rem; background: #fef2f2; color: #991b1b;
+                 border: 1px solid #fecaca; border-left: 6px solid #dc2626; border-radius: 8px; font-size: 1.05rem; }
+
+    /* Comparaison */
+    .m2-moins { color: #991b1b; font-weight: 700; }
+
+    /* Statut des bases */
+    .m2-pastille { display: inline-block; padding: .1rem .6rem; border-radius: 999px; font-weight: 700; font-size: .85rem; }
+    .m2-ouverte { background: #dcfce7; color: #166534; }
+    .m2-fermee { background: #f1f5f9; color: #475569; }
+    .m2-panne { background: #fee2e2; color: #991b1b; }
+
+    /* Carte */
+    .m2-iframe { width: 100%; height: 480px; border: 1px solid #dbe3ea; border-radius: 8px; }
+    .m2-legende { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-bottom: .6rem; font-size: .88rem; color: #475569; }
+    .m2-point { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; margin-right: .3rem; vertical-align: -1px; }
+
+    @media (max-width: 800px) { .m2-vedette { grid-template-columns: 1fr 1fr; } }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>M2 — Emplacement des ambulances</h1>
+<p>Placer K ambulances pour couvrir le plus d'habitants possible en moins de R minutes.</p>
 
-<section class="module-zone">
-    <h2>1. Entrées</h2>
-    <p>TODO (Responsable M2) : paramètres K et R, tableau modifiable des zones et bases candidates, import CSV.</p>
+<!-- ===== 1. Entrées ===== -->
+<form class="m2-carte" method="post">
+    <h2>Paramètres</h2>
+    <label class="m2-champ">Nombre d'ambulances K
+        <input name="nb_ambulances" type="number" min="1" max="8" value="{{ K }}">
+    </label>
+    <label class="m2-champ">Rayon R (minutes)
+        <input name="rayon_minutes" type="number" min="1" step="0.5" value="{{ '%g'|format(R) }}">
+    </label>
+
+    <h3>Bases candidates</h3>
+    <table class="m2-table">
+        <tr><th>Base</th><th>x (km)</th><th>y (km)</th><th>En panne ?</th></tr>
+        {% for b in bases %}
+        <tr>
+            <td>{{ b.id }}</td>
+            <td>{{ b.x }}</td>
+            <td>{{ b.y }}</td>
+            <td><input type="checkbox" name="bases_en_panne" value="{{ b.id }}"
+                       {% if b.id in bases_en_panne %}checked{% endif %}></td>
+        </tr>
+        {% endfor %}
+    </table>
+    <p class="m2-aide">Une base en panne (ambulance hors service, garage fermé…) ne peut pas être choisie.</p>
+
+    <p style="margin-top: 1rem;"><button class="m2-bouton" type="submit">Résoudre</button></p>
+</form>
+
+{% if resultat %}
+{% set couverte = resultat.objectif %}
+{% set non_couverte = population_totale - couverte %}
+{% set taux = 100 * couverte / population_totale %}
+
+<!-- ===== 2. Alerte si la couverture est trop faible ===== -->
+{% if taux < 70 %}
+<p class="m2-alerte">⚠ <strong>Couverture insuffisante ({{ "%.1f"|format(taux) }} %)</strong> :
+    {{ "{:,.0f}".format(non_couverte).replace(",", " ") }} habitants n'ont pas d'ambulance en moins de {{ '%g'|format(R) }} minutes.</p>
+{% endif %}
+
+<!-- ===== 3. Tuile vedette : population couverte ===== -->
+<section class="m2-carte">
+    <div class="m2-vedette">
+        <div class="m2-tuile">
+            <span>Population couverte</span>
+            <strong class="m2-gros">{{ "{:,.0f}".format(couverte).replace(",", " ") }}</strong>
+            <span>sur {{ "{:,.0f}".format(population_totale).replace(",", " ") }} habitants — <strong style="font-size:1rem">{{ "%.1f"|format(taux) }} %</strong></span>
+            <div class="m2-fond">
+                <div class="m2-barre {% if taux >= 90 %}m2-vert{% elif taux >= 70 %}m2-orange{% else %}m2-rouge{% endif %}"
+                     style="width: {{ taux }}%"></div>
+            </div>
+            {% if reference %}
+            {% set ecart = couverte - reference.objectif %}
+            {% if ecart < 0 %}
+            <span class="m2-badge m2-badge-baisse">▼ {{ "{:,.0f}".format(-ecart).replace(",", " ") }} habitants par rapport à la normale</span>
+            {% else %}
+            <span class="m2-badge m2-badge-egal">= aucune perte par rapport à la normale</span>
+            {% endif %}
+            {% endif %}
+        </div>
+        <div class="m2-tuile">
+            <span>Non couverts</span>
+            <strong class="m2-non">{{ "{:,.0f}".format(non_couverte).replace(",", " ") }}</strong>
+        </div>
+        <div class="m2-tuile">
+            <span>Bases ouvertes</span>
+            <strong>{{ resultat.solution.bases_ouvertes|join(", ") or "aucune" }}</strong>
+        </div>
+        <div class="m2-tuile">
+            <span>Temps de calcul</span>
+            <strong>{{ resultat.temps }} s</strong>
+        </div>
+    </div>
 </section>
 
-<section class="module-zone">
-    <h2>2. Résolution</h2>
-    <p>TODO (Responsable M2) : bouton Résoudre appelant <code>modules.m2_ambulances.solve</code>.</p>
+<!-- ===== 4. Comparaison situation normale / scénario ===== -->
+{% if reference %}
+<section class="m2-carte">
+    <h2>Impact de la panne sur la couverture</h2>
+<p class="m2-aide" style="margin: -.4rem 0 .8rem;">Comparaison entre la situation normale (toutes les bases disponibles) et la situation avec la base {{ bases_en_panne|join(", ") }} en panne.</p>
+    <table class="m2-table">
+        <tr><th></th><th>Situation normale</th><th>Avec la panne (base {{ bases_en_panne|join(", ") }})</th><th>Écart</th></tr>
+        <tr><td>Population couverte</td>
+            <td>{{ "{:,.0f}".format(reference.objectif).replace(",", " ") }}</td>
+            <td>{{ "{:,.0f}".format(couverte).replace(",", " ") }}</td>
+            <td class="{% if couverte < reference.objectif %}m2-moins{% endif %}">{{ "{:+,.0f}".format(couverte - reference.objectif).replace(",", " ") }}</td></tr>
+        <tr><td>Taux de couverture</td>
+            <td>{{ "%.1f"|format(100 * reference.objectif / population_totale) }} %</td>
+            <td>{{ "%.1f"|format(taux) }} %</td>
+            <td class="{% if couverte < reference.objectif %}m2-moins{% endif %}">{{ "%+.1f"|format(taux - 100 * reference.objectif / population_totale) }} points</td></tr>
+        <tr><td>Bases ouvertes</td>
+            <td>{{ reference.solution.bases_ouvertes|join(", ") }}</td>
+            <td>{{ resultat.solution.bases_ouvertes|join(", ") or "aucune" }}</td>
+            <td></td></tr>
+    </table>
+</section>
+{% endif %}
+
+<!-- ===== 5. Carte ===== -->
+<section class="m2-carte">
+    <h2>Carte de couverture</h2>
+    <div class="m2-legende">
+        <span><span class="m2-point" style="background:#16a34a"></span>Commune couverte</span>
+        <span><span class="m2-point" style="background:#dc2626"></span>Commune non couverte</span>
+        <span>🟢 Base ouverte (cercle = {{ '%g'|format(R) }} min)</span>
+        <span>⚪ Base fermée</span>
+        <span>🔴 Base en panne</span>
+    </div>
+    <iframe class="m2-iframe" srcdoc="{{ carte_html }}"></iframe>
 </section>
 
-<section class="module-zone">
-    <h2>3. Résultats</h2>
-    <p>TODO (Responsable M2) : bases choisies, taux de couverture, carte Folium avec cercles, temps de calcul.</p>
+<!-- ===== 6. Communes ===== -->
+<section class="m2-carte">
+    <h2>Communes</h2>
+    <table class="m2-table">
+        <tr><th>Commune</th><th>Population</th><th>Couverte ?</th></tr>
+        {% for c in communes %}
+        <tr>
+            <td>{{ c.nom }}</td>
+            <td>{{ c.population }}</td>
+            {% if c.nom in resultat.solution.communes_couvertes %}
+            <td class="m2-oui">Oui</td>
+            {% else %}
+            <td class="m2-non">Non</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </table>
 </section>
+
+<!-- ===== 7. Gurobi contre glouton ===== -->
+<section class="m2-carte">
+    <h2>Gurobi contre glouton</h2>
+    <table class="m2-table">
+        <tr><th></th><th>Gurobi (exact)</th><th>Glouton (heuristique)</th></tr>
+        <tr><td>Bases ouvertes</td>
+            <td>{{ resultat.solution.bases_ouvertes|join(", ") }}</td>
+            <td>{{ resultat_glouton.solution.bases_ouvertes|join(", ") }}</td></tr>
+        <tr><td>Population couverte</td>
+            <td>{{ "{:,.0f}".format(resultat.objectif).replace(",", " ") }}</td>
+            <td>{{ "{:,.0f}".format(resultat_glouton.objectif).replace(",", " ") }}</td></tr>
+    </table>
+</section>
+{% endif %}
 {% endblock %}
